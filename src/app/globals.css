@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-display: var(--font-cond), var(--font-body), sans-serif;
+}
+
+@theme {
+  --color-yard: #e2e4e2;
+  --color-panel: #ffffff;
+  --color-ink: #151718;
+  --color-ink-2: #464c4f;
+  --color-ink-3: #5c6367;
+  --color-line: #d2d5d3;
+  --color-oxide: #a2391f;
+  --color-oxide-deep: #7b2915;
+  --color-oxide-soft: #f7dcd2;
+  --color-signal: #ffc21a;
+  --color-signal-deep: #eaa900;
+  --color-seal: #1d774b;
+  --color-seal-soft: #dbeee3;
+  --color-customs: #3b3fa8;
+  --color-customs-soft: #e7e8f7;
+  --color-kz: #00afca;
+}
+
+:root {
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-yard);
+  color: var(--color-ink);
+  caret-color: var(--color-oxide);
+  font-feature-settings: "tnum" 1;
+}
+
+::selection {
+  background: var(--color-signal);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+/* corrugated container steel */
+.corrugated {
+  background-color: var(--color-oxide);
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 13px, rgb(0 0 0 / 0.16) 13px 17px, rgb(255 255 255 / 0.07) 17px 19px, transparent 19px 26px),
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(0 0 0 / 0.12));
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@keyframes seal-drop {
+  0% { transform: translateY(-140%) rotate(-30deg); opacity: 0; }
+  55% { transform: translateY(8%) rotate(6deg); opacity: 1; }
+  72% { transform: translateY(-4%) rotate(-9deg); }
+  86% { transform: translateY(1%) rotate(-4deg); }
+  100% { transform: translateY(0) rotate(-6deg); opacity: 1; }
+}
+.seal-drop { animation: seal-drop 900ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both; transform-origin: 30% 10%; }
+
+@keyframes toast-in {
+  from { transform: translateY(-18px) scale(0.97); opacity: 0; filter: blur(4px); }
+  to { transform: none; opacity: 1; filter: none; }
+}
+.toast-in { animation: toast-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes pull-in {
+  from { transform: translateY(-14px); opacity: 0.2; box-shadow: 0 0 0 3px var(--color-signal); }
+  60% { box-shadow: 0 0 0 3px var(--color-signal); }
+  to { transform: none; opacity: 1; box-shadow: 0 0 0 0 transparent; }
+}
+.pull-in { animation: pull-in 2200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes typing { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+.typing span { animation: typing 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: 0.15s; }
+.typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+.sweep { animation: sweep 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .seal-drop, .toast-in, .pull-in, .typing span, .sweep { animation: none !important; }
+}
