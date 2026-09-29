@@ -3,149 +3,126 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, MessageCircle, Phone } from "lucide-react";
-import { useStore } from "@/lib/store";
-import { BODIES, ago, city, client, dayLabel, driver, money, plural } from "@/lib/data";
-import { Avatar, Bar, DataPlate, Empty, Plate, Rating, Route, Seal, Tag } from "@/components/ui";
+import { CalendarDays, MapPin, MessageCircle, Navigation, Phone, ShieldCheck } from "lucide-react";
+import { useStore, route } from "@/lib/store";
+import { BODIES, KINDS, LOADING, isOpen } from "@/lib/catalog";
+import { cityFull } from "@/lib/geo";
+import { DayLabel, count, dayLabel, money } from "@/lib/format";
+import { driverOf, fit, intlStatus, tons } from "@/lib/match";
+import { ME_CARRIER, ME_CLIENT } from "@/lib/types";
+import { goingLabel } from "@/components/cards";
+import { Avatar, Button, Card, Empty, FitBadge, FitChecks, H2, LinkButton, Option, Page, Pill, Plate, Row, Sheet, Stars, TopBar, TruckArt, Verified } from "@/components/ui";
 
 export default function TruckPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { state, inviteTruck, answerInvite, openChat, removeTruck, toast } = useStore();
-  const t = state.trucks.find((x) => x.id === id);
-  const [picking, setPicking] = useState(false);
+  const { s, proposeToTruck, openChat, toast } = useStore();
+  const [pick, setPick] = useState(false);
+  const t = s.trucks.find((x) => x.id === id);
+  if (!t) return (<><TopBar title="Машина" /><Page className="p-4"><Empty title="Машина не найдена" text="Возможно, водитель снял её с размещения." /></Page></>);
 
-  if (!t) return (<><Bar title="Машина" /><div className="mx-auto max-w-xl p-4"><Empty title="Машина уже не на линии" body="Водитель снял объявление или уже взял груз." href="/" cta="В ленту" /></div></>);
-
-  const d = driver(t.driverId);
-  const myOpen = state.cargo.filter((c) => c.mine && c.status === "open");
-  const sentCargo = t.sent ? state.cargo.find((c) => c.id === t.sent!.cargoId) : undefined;
-  const chat = () => router.push(`/chats/${openChat("client", d.id, sentCargo ? { from: sentCargo.from, to: sentCargo.to, price: sentCargo.price } : undefined)}`);
+  const d = driverOf(s, t.driverId);
+  const intl = intlStatus(t);
+  const role = s.user.role;
+  const mine = t.carrierId === ME_CARRIER;
+  const myOpen = s.cargo.filter((c) => c.clientId === ME_CLIENT && isOpen(c.status));
+  const best = myOpen.map((c) => ({ c, f: fit(t, c) })).sort((a, b) => (a.f.level === "full" ? -1 : 1) - (b.f.level === "full" ? -1 : 1))[0];
+  const proposed = (cid: string) => s.cargo.find((c) => c.id === cid)?.offers.some((o) => o.truckId === t.id && o.by === "client" && o.status === "new");
 
   return (
-    <main>
-      <Bar title={t.mine ? "Ваша машина на линии" : d.name} sub={d.truck} />
-      <section className="corrugated text-white">
-        <div className="mx-auto max-w-xl px-4 pb-6 pt-2">
-          <Plate plate={d.plate} big />
-          <div className="mt-4 text-[12px] font-bold uppercase tracking-[0.08em] text-oxide-soft">Сейчас в {city(t.from)} · свободен {dayLabel(t.date).toLowerCase()}</div>
-          <div className="mt-1 font-display text-[40px] font-extrabold uppercase leading-[0.92] sm:text-[46px]">{t.to.length ? t.to.map(city).join(" · ") : "Любое направление"}</div>
-          <div className="mt-5 flex items-end justify-between gap-3">
-            <div>
-              <div className="font-display text-[40px] font-extrabold leading-none tabular-nums">{t.rateType === "km" ? `${t.rate} ₸/км` : money(t.rate)}</div>
-              <div className="mt-1 text-[13px] font-semibold text-oxide-soft">{t.rateType === "km" ? "ставка за километр, торг уместен" : "за рейс"} · {ago(t.at)}</div>
-            </div>
-            {t.sent?.status === "accepted" && sentCargo?.seal && <Seal code={sentCargo.seal} animate small />}
+    <>
+      <TopBar title="Машина" />
+      <Page className="px-3 pb-36 pt-3">
+        <Card className="p-5">
+          <div className="rounded-2xl bg-brand-soft/60 px-4 py-3"><TruckArt body={t.body} kind={t.kind} className="mx-auto max-w-sm" /></div>
+          <p className="mt-1.5 text-center text-sm text-ink-3">Иллюстрация. В рабочей версии здесь будут фото машины ({t.photos} шт.)</p>
+          <h1 className="mt-4 text-2xl font-bold leading-tight">{BODIES[t.body].name}, {tons(t.capacity)}{t.volume ? ` · ${t.volume} м³` : ""}</h1>
+          <p className="text-lg text-ink-2">{t.make} {t.model}, {t.year} год</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2"><Plate plate={t.plate} cn={t.cnPlate} /><Verified ok={t.verified} text="Документы проверены" /></div>
+          <ul className="mt-4 grid gap-2 border-t border-line pt-4 text-lg">
+            <li className="flex items-center gap-3"><MapPin size={22} className="shrink-0 text-brand" aria-hidden />Сейчас: <b className="font-semibold">{cityFull(t.at)}</b></li>
+            <li className="flex items-center gap-3"><CalendarDays size={22} className="shrink-0 text-brand" aria-hidden />{t.state === "trip" ? "В рейсе, освободится" : "Свободна"}: <b className="font-semibold">{DayLabel(t.freeFrom)}</b></li>
+            <li className="flex items-start gap-3"><Navigation size={22} className="mt-0.5 shrink-0 text-brand" aria-hidden /><span>Готов ехать: <b className="font-semibold">{goingLabel(t)}</b></span></li>
+          </ul>
+          <p className="mt-3 text-[0.95rem] text-ink-3">Место показано по городу — точный адрес водитель сообщит сам.</p>
+        </Card>
+
+        {role === "client" && best && (
+          <>
+            <H2>Для вашей заявки {route(best.c)}</H2>
+            <Card className="p-4">
+              <div className="mb-3"><FitBadge fit={best.f} /></div>
+              <FitChecks fit={best.f} />
+            </Card>
+          </>
+        )}
+
+        <H2>Характеристики</H2>
+        <Card className="px-4">
+          <Row label="Тип">{KINDS[t.kind].name}</Row>
+          <Row label="Кузов">{BODIES[t.body].name}</Row>
+          <Row label="Грузоподъёмность">{tons(t.capacity)}</Row>
+          <Row label="Объём">{t.volume ? `${t.volume} м³` : "—"}</Row>
+          <Row label="Размеры кузова">{t.dims.map((x) => String(x).replace(".", ",")).join(" × ")} м</Row>
+          <Row label="Загрузка">{t.loading.map((l) => LOADING[l]).join(", ")}</Row>
+          {t.temp && <Row label="Температура">{t.temp[0]}…{t.temp[1]} °C</Row>}
+          {!!t.extras.length && <Row label="Дополнительно">{t.extras.join(", ")}</Row>}
+        </Card>
+
+        <H2>Международные рейсы</H2>
+        <Card className="px-4">
+          <div className="py-3"><Pill tone={intl.ok ? "ok" : "gray"}>{intl.text}</Pill></div>
+          <Row label="Въезд в Китай">{t.intl.chinaEntry ? "Да" : "Нет"}</Row>
+          <Row label="Последний рейс за границу">{t.intl.lastTrip ? dayLabel(t.intl.lastTrip) : "—"}</Row>
+          <Row label="Следующий въезд">{t.intl.nextEntry ? `с ${dayLabel(t.intl.nextEntry)}` : "Без ограничений"}</Row>
+          <Row label="Документы">{t.intl.permits.length ? t.intl.permits.join(", ") : "—"}</Row>
+        </Card>
+
+        <H2>Водитель</H2>
+        <Link href={`/driver/${d.id}`} className="flex items-center gap-3 rounded-2xl border border-line bg-white p-4 active:bg-page">
+          <Avatar name={d.name} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-lg font-semibold">{d.name}</div>
+            <div className="text-ink-3"><Stars value={d.rating} /> · {count(d.trips, ["перевозка", "перевозки", "перевозок"])} · стаж {count(d.years, ["год", "года", "лет"])}</div>
+          </div>
+          {d.verified && <ShieldCheck size={24} className="shrink-0 text-ok" aria-label="Телефон подтверждён" />}
+        </Link>
+      </Page>
+
+      {role === "client" && !mine && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+          <div className="mx-auto grid max-w-xl grid-cols-[auto_auto_1fr] gap-2 px-3">
+            <Button variant="outline" aria-label="Позвонить водителю" onClick={() => toast({ title: "Звонок в демо-версии не совершается", body: d.name })}><Phone size={22} /></Button>
+            <Button variant="outline" aria-label="Написать водителю" onClick={() => router.push(`/chats/${openChat(ME_CLIENT, d.id, best?.c.id)}`)}><MessageCircle size={22} /></Button>
+            <Button onClick={() => setPick(true)} disabled={t.state !== "free"}>Предложить груз</Button>
           </div>
         </div>
-      </section>
-
-      <div className="mx-auto max-w-xl px-3">
-        <div className="-mt-3 rounded-[3px] border border-line bg-white p-4 shadow-[0_6px_16px_-10px_rgba(0,0,0,0.3)]">
-          <DataPlate items={[["Кузов", BODIES[t.body].name], ["Грузоподъёмн.", `${t.capacity} т`], ["Объём", t.volume ? `${t.volume} м³` : "—"]]} />
-          <div className="mt-3 flex flex-wrap gap-1.5">{d.docs.map((x) => <Tag key={x} tone="dark">{x}</Tag>)}<Tag>{dayLabel(t.date)}</Tag></div>
-          {t.comment && <p className="mt-3 border-t border-dashed border-line pt-3 text-[15px] leading-relaxed text-ink-2">{t.comment}</p>}
+      )}
+      {mine && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+          <div className="mx-auto max-w-xl px-3"><LinkButton href={`/fleet/${t.id}`} full>Управлять машиной</LinkButton></div>
         </div>
+      )}
 
-        {!t.mine && (
-          <div className="mt-3 flex items-center gap-3 rounded-[3px] border border-line bg-white p-3.5">
-            <Avatar name={d.name} kind="driver" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-bold">{d.name}</div>
-              <Rating value={d.rating} sub={`${d.trips} рейсов · стаж ${d.years} ${plural(d.years, ["год", "года", "лет"])}`} />
-            </div>
-          </div>
-        )}
-
-        {/* ------- client: offer my cargo to this truck ------- */}
-        {!t.mine && state.role === "client" && (
-          <section className="mt-5">
-            {t.sent?.status === "pending" && sentCargo ? (
-              <div className="relative overflow-hidden rounded-[3px] border-2 border-ink bg-white p-4">
-                <div className="sweep absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-signal/40 to-transparent" aria-hidden />
-                <div className="relative">
-                  <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-ink-3">Предложение отправлено водителю</div>
-                  <div className="mt-1"><Route from={sentCargo.from} to={sentCargo.to} size="sm" /></div>
-                  <p className="mt-1 text-[14px] text-ink-2">{sentCargo.weight} т · {money(sentCargo.price)}. Ждём ответа.</p>
-                </div>
-              </div>
-            ) : t.sent?.status === "accepted" && sentCargo ? (
-              <div className="rounded-[3px] border-2 border-seal bg-seal-soft p-4">
-                <div className="flex items-center gap-2 text-[15px] font-extrabold text-seal"><Check size={18} strokeWidth={3} /> {d.name.split(" ")[0]} взял ваш груз</div>
-                <p className="mt-1 text-[14px] text-ink-2">{city(sentCargo.from)} → {city(sentCargo.to)} · {money(sentCargo.price)}</p>
-              </div>
-            ) : picking ? (
-              <div className="rounded-[3px] border border-line bg-white p-4">
-                <div className="text-[16px] font-extrabold">Какой груз предложить?</div>
-                <div className="mt-3 grid gap-2">
-                  {myOpen.map((c) => (
-                    <button key={c.id} onClick={() => { inviteTruck(t.id, c.id); setPicking(false); }} className="rounded-[4px] border-2 border-line p-3 text-left active:border-ink">
-                      <Route from={c.from} to={c.to} size="sm" />
-                      <div className="mt-1 text-[13.5px] text-ink-2">{c.what} · {c.weight} т · <b>{money(c.price)}</b></div>
-                    </button>
-                  ))}
-                  {!myOpen.length && <p className="text-[14px] text-ink-3">У вас нет открытых грузов.</p>}
-                  <Link href="/new/cargo" className="rounded-[4px] border-2 border-dashed border-ink/40 p-3 text-center text-[15px] font-bold">+ Новый груз</Link>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
-              {!t.sent && !picking && (
-                <button onClick={() => setPicking(true)} className="rounded-[5px] border-2 border-ink bg-signal py-3.5 text-[17px] font-extrabold active:bg-signal-deep">Предложить груз</button>
-              )}
-              {(t.sent || picking) && <span />}
-              <button onClick={chat} aria-label="Написать водителю" className="grid size-[54px] place-items-center rounded-[5px] border-2 border-ink bg-white active:bg-yard"><MessageCircle size={22} /></button>
-              <button onClick={() => toast({ title: "Демо-режим", body: "Звонки появятся вместе с бэкендом." })} aria-label="Позвонить" className="grid size-[54px] place-items-center rounded-[5px] border-2 border-ink bg-white active:bg-yard"><Phone size={22} /></button>
-            </div>
-          </section>
-        )}
-
-        {/* ------- driver: my post, incoming offers ------- */}
-        {t.mine && (
-          <section className="mt-6">
-            <h2 className="mb-3 px-1 text-[20px] font-extrabold">Клиенты предлагают груз</h2>
-            <div className="grid gap-3">
-              {t.invites.length ? t.invites.map((i) => {
-                const k = client(i.clientId);
-                return (
-                  <article key={i.id} className="toast-in rounded-[3px] border border-line bg-white p-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={k.company} kind="client" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[15px] font-bold">{k.company}</div>
-                        <Rating value={k.rating} sub={ago(i.at)} />
-                      </div>
-                    </div>
-                    <div className="mt-3"><Route from={i.from} to={i.to} size="sm" /></div>
-                    <div className="mt-1 text-[14px] text-ink-2">{i.what} · {i.weight} т</div>
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <div className="font-display text-[28px] font-extrabold leading-none">{money(i.price)}</div>
-                      {i.status === "new" ? (
-                        <div className="flex gap-2">
-                          <button onClick={() => answerInvite(t.id, i.id, false)} className="rounded-[4px] border-2 border-line px-3 py-2.5 text-[14px] font-bold active:border-ink">Отказать</button>
-                          <button onClick={() => { const cid = answerInvite(t.id, i.id, true); if (cid) router.push(`/chats/${cid}`); }} className="rounded-[4px] border-2 border-ink bg-signal px-4 py-2.5 text-[15px] font-extrabold active:bg-signal-deep">Беру</button>
-                        </div>
-                      ) : (
-                        <Tag tone={i.status === "accepted" ? "seal" : "plain"}>{i.status === "accepted" ? "Опломбировано" : "Отказано"}</Tag>
-                      )}
-                    </div>
-                  </article>
-                );
-              }) : (
-                <div className="relative overflow-hidden rounded-[3px] border border-line bg-white p-5">
-                  <div className="sweep absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-signal/30 to-transparent" aria-hidden />
-                  <p className="relative text-[15px] font-semibold text-ink-2">Ваша машина видна клиентам. Как только кто-то предложит груз — он появится здесь.</p>
-                </div>
-              )}
-            </div>
-            <button onClick={() => { removeTruck(t.id); router.push("/"); }} className="mt-5 w-full rounded-[5px] border-2 border-line bg-white py-3 text-[15px] font-bold text-ink-2 active:border-ink">
-              Снять машину с линии
-            </button>
-          </section>
-        )}
-        <div className="h-6" />
-      </div>
-    </main>
+      <Sheet open={pick} onClose={() => setPick(false)} title="Какой груз предложить">
+        <div className="grid gap-2 pt-1">
+          {myOpen.map((c) => {
+            const f = fit(t, c);
+            const sent = proposed(c.id);
+            return (
+              <Option key={c.id} selected={!!sent} onClick={() => {
+                if (sent) return;
+                proposeToTruck(c.id, t.id);
+                setPick(false);
+                toast({ title: "Предложение отправлено", body: `${d.name} получит заявку ${route(c)}.` });
+              }}
+                title={`${route(c)} · ${tons(c.weight)}`} hint={sent ? "Уже предложили — ждём ответа" : `${c.price ? money(c.price) : "цену предложит водитель"} · ${f.level === "full" ? "подходит" : f.level === "partial" ? "почти подходит" : "может не подойти"}`} />
+            );
+          })}
+          {!myOpen.length && <p className="text-lg text-ink-2">У вас нет открытых заявок.</p>}
+          <LinkButton href="/new" variant="secondary" full className="mt-2">Новая заявка</LinkButton>
+        </div>
+      </Sheet>
+    </>
   );
 }

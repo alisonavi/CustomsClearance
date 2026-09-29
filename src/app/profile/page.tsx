@@ -1,58 +1,73 @@
 "use client";
 
-import { FileCheck2, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ChevronRight, History, LogOut, Package, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { ME_CLIENT, ME_DRIVER, plural } from "@/lib/data";
-import { Avatar, Bar, Plate, Rating, RoleSwitch, Section } from "@/components/ui";
+import { RATE_CARRIER, RATE_CLIENT } from "@/lib/catalog";
+import { count } from "@/lib/format";
+import { criteria } from "@/lib/match";
+import { ME_CLIENT } from "@/lib/types";
+import { Avatar, Button, Card, H2, Option, Page, Pill, Stars, Toggle, TopBar } from "@/components/ui";
+import { Breakdown } from "@/components/reviews";
 
 export default function Profile() {
-  const { state, reset, toast } = useStore();
-  const isDriver = state.role === "driver";
-  const docs = isDriver
-    ? ["Водительское удостоверение, кат. CE", "Техпаспорт тягача и прицепа", "TIR-карнет", "Страховка CMR"]
-    : ["БИН и свидетельство ТОО", "Договор-оферта с перевозчиком", "Доверенность на получение груза"];
+  const { s, setRole, setBigText, resetDemo, logout, toast } = useStore();
+  const router = useRouter();
+  const role = s.user.role;
+  const me = role === "client" ? s.clients.find((c) => c.id === ME_CLIENT)! : s.drivers.find((d) => d.id === "me-d1")!;
+  const name = role === "client" ? s.user.clientName : s.user.carrierName;
+  const labels = role === "client" ? RATE_CLIENT : RATE_CARRIER;
+  const deals = role === "client" ? (me as typeof s.clients[number]).deals : (me as typeof s.drivers[number]).trips;
   return (
-    <main>
-      <Bar title="Профиль" back={false} right={<RoleSwitch />} />
-      <div className="mx-auto max-w-xl">
-        <div className="mx-3 mt-3 rounded-[3px] border border-line bg-white p-4">
-          <div className="flex items-center gap-3">
-            <Avatar name={isDriver ? ME_DRIVER.name : ME_CLIENT.company} kind={isDriver ? "driver" : "client"} />
+    <>
+      <TopBar title="Профиль" back={false} />
+      <Page className="px-3 pb-10 pt-3">
+        <Card className="p-5">
+          <div className="flex items-center gap-4">
+            <Avatar name={name} size="lg" />
             <div className="min-w-0">
-              <div className="truncate text-[18px] font-extrabold">{isDriver ? ME_DRIVER.name : ME_CLIENT.name}</div>
-              <div className="truncate text-[14px] text-ink-3">{isDriver ? ME_DRIVER.truck : ME_CLIENT.company}</div>
-              {isDriver ? (
-                <Rating value={ME_DRIVER.rating} sub={`${ME_DRIVER.trips} рейсов`} />
-              ) : (
-                <Rating value={ME_CLIENT.rating} sub={`${ME_CLIENT.deals} ${plural(ME_CLIENT.deals, ["сделка", "сделки", "сделок"])}`} />
-              )}
+              <div className="text-2xl font-bold leading-tight">{name}</div>
+              <div className="text-lg text-ink-2">{role === "client" ? s.user.company || "Частное лицо" : s.user.carrierType === "company" ? "Транспортная компания" : "Водитель"}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-ink-3">{s.user.phone || "+7 700 000 00 00"} <Pill tone="ok"><ShieldCheck size={15} aria-hidden /> Подтверждён</Pill></div>
             </div>
           </div>
-          {isDriver && <div className="mt-3"><Plate plate={ME_DRIVER.plate} big /></div>}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-page px-4 py-3"><div className="text-ink-3">Рейтинг</div><div className="text-2xl font-bold"><Stars value={me.rating} size={20} /></div></div>
+            <div className="rounded-xl bg-page px-4 py-3"><div className="text-ink-3">Перевозок</div><div className="text-2xl font-bold">{deals}</div></div>
+          </div>
+        </Card>
+
+        <H2>Я сейчас</H2>
+        <div className="grid gap-2" role="radiogroup">
+          <Option selected={role === "client"} onClick={() => { setRole("client"); toast({ title: "Режим клиента", body: "Ищите машины и размещайте заявки." }); }} icon={<Package size={26} />} title="Клиент" hint="Мне нужно перевезти груз" />
+          <Option selected={role === "carrier"} onClick={() => { setRole("carrier"); toast({ title: "Режим перевозчика", body: "Ищите грузы для своих машин." }); }} icon={<Truck size={26} />} title="Перевозчик" hint="У меня есть грузовик" />
         </div>
 
-        <Section title="Документы">
-          <ul className="overflow-hidden rounded-[3px] border border-line bg-white">
-            {docs.map((d) => (
-              <li key={d} className="flex items-center gap-3 border-b border-line px-4 py-3 text-[15px] last:border-0">
-                <FileCheck2 size={20} className="shrink-0 text-seal" aria-hidden />
-                <span className="flex-1">{d}</span>
-                <button onClick={() => toast({ title: "Демо-режим", body: "Загрузка документов появится вместе с бэкендом." })} className="text-[13.5px] font-bold text-customs">Обновить</button>
-              </li>
-            ))}
-          </ul>
-        </Section>
+        <H2 right={<span className="text-ink-3">{count(me.ratingCount, ["оценка", "оценки", "оценок"])}</span>}>{role === "client" ? "Как меня оценивают перевозчики" : "Как меня оценивают клиенты"}</H2>
+        <Card className="p-4"><Breakdown labels={labels} values={criteria(me.reviews, labels.length)} empty={!me.reviews.length} /></Card>
 
-        <Section title="Демо">
-          <div className="rounded-[3px] border border-line bg-white p-4 text-[14.5px] leading-relaxed text-ink-2">
-            Все люди, компании, машины, цены и рейтинги здесь — выдуманные демо-данные. Данные хранятся только в этом браузере.
-            Переключайте «Клиент / Водитель», чтобы увидеть обе стороны сделки.
-            <button onClick={() => { reset(); toast({ title: "Демо сброшено", body: "Вернули исходные грузы, машины и чаты." }); }} className="mt-3 flex w-full items-center justify-center gap-2 rounded-[4px] border-2 border-ink py-3 text-[15px] font-extrabold text-ink active:bg-yard">
-              <RotateCcw size={18} /> Сбросить демо-данные
-            </button>
+        <H2>Удобство</H2>
+        <Card className="px-4 py-2">
+          <Toggle checked={s.bigText} onChange={setBigText} label="Крупный текст" hint="Всё станет крупнее — удобно, если плохо видно" />
+          <div className="border-t border-line py-3"><div className="text-lg font-semibold">Язык</div><div className="text-ink-3">Русский. Казахский и китайский — в следующих версиях.</div></div>
+        </Card>
+
+        <H2>Ещё</H2>
+        <Card className="divide-y divide-line">
+          <Link href="/orders" className="flex items-center gap-3 p-4 text-lg font-semibold active:bg-page"><History size={24} className="text-brand" /> История перевозок <ChevronRight className="ml-auto text-ink-3" /></Link>
+          <Link href="/notifications" className="flex items-center gap-3 p-4 text-lg font-semibold active:bg-page"><ShieldCheck size={24} className="text-brand" /> Уведомления <ChevronRight className="ml-auto text-ink-3" /></Link>
+        </Card>
+
+        <H2>Демо-версия</H2>
+        <Card className="p-4">
+          <p className="text-ink-2">Все люди, компании, машины, цены и отзывы выдуманы. Данные хранятся только в этом браузере. Переключайте «Клиент / Перевозчик», чтобы увидеть обе стороны сделки.</p>
+          <div className="mt-4 grid gap-2">
+            <Button variant="outline" full onClick={() => { resetDemo(); toast({ title: "Демо сброшено", body: "Вернули исходные грузы, машины и сообщения." }); }}><RotateCcw size={20} /> Сбросить демо-данные</Button>
+            <Button variant="danger" full onClick={() => { logout(); router.replace("/welcome"); }}><LogOut size={20} /> Выйти</Button>
           </div>
-        </Section>
-      </div>
-    </main>
+        </Card>
+      </Page>
+    </>
   );
 }

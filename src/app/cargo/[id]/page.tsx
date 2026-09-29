@@ -3,224 +3,427 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, MessageCircle, Phone } from "lucide-react";
-import { useStore } from "@/lib/store";
-import { BODIES, CUSTOMS, ago, client, dayLabel, driver, km, money, num, perKm, plural, suggestPrice } from "@/lib/data";
-import { Avatar, Bar, Castings, CustomsTag, DataPlate, Empty, Plate, Rating, Route, Seal, Stepper, Tag } from "@/components/ui";
+import { Check, MessageCircle, Phone, Truck as TruckIcon } from "lucide-react";
+import { useStore, route } from "@/lib/store";
+import { BODIES, CARRIER_STEP, CATEGORIES, EXTRAS, LOADING, PACKAGING, RATE_CARRIER, RATE_CLIENT, isOpen } from "@/lib/catalog";
+import { cityFull, km } from "@/lib/geo";
+import { ago, count, money, nf, rangeLabel, round10k } from "@/lib/format";
+import { clientOf, driverOf, fit, isIntl, matchTrucks, priceHint, tons, truckOf } from "@/lib/match";
+import { ME_CARRIER, ME_CLIENT, type Cargo, type Offer, type Truck } from "@/lib/types";
+import { customsLabel } from "@/components/cards";
+import {
+  Avatar, Button, Card, Choice, Empty, FitBadge, FitChecks, H2, Option, Page, Pill, Plate, RouteLine, Row, Sheet, StarInput, Stars, Stepper,
+  Timeline, TopBar, TruckArt, Verified, inputCls,
+} from "@/components/ui";
+
+const demoCall = "Звонок в демо-версии не совершается";
 
 export default function CargoPage() {
   const { id } = useParams<{ id: string }>();
+  const { s } = useStore();
+  const c = s.cargo.find((x) => x.id === id);
+  if (!c) return (<><TopBar title="Груз" /><Page className="p-4"><Empty title="Заявка не найдена" text="Возможно, её уже закрыли." /></Page></>);
+  return <CargoView c={c} />;
+}
+
+function CargoView({ c }: { c: Cargo }) {
+  const { s } = useStore();
+  const role = s.user.role;
+  const dealTruck = c.deal ? truckOf(s, c.deal.truckId) : undefined;
+  const owner = role === "client" && c.clientId === ME_CLIENT;
+  const myTrip = role === "carrier" && dealTruck?.carrierId === ME_CARRIER;
+  const hint = priceHint(c.from, c.to, c.weight);
+  return (
+    <>
+      <TopBar title={owner ? "Моя заявка" : myTrip ? "Мой рейс" : "Груз"} />
+      <Page className="px-3 pb-36 pt-3">
+        <Card className="p-5">
+          <RouteLine big from={cityFull(c.from)} fromSub={c.fromPoint} to={cityFull(c.to)} toSub={c.toPoint} />
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-page px-3.5 py-2.5"><div className="text-ink-3">Загрузка</div><div className="text-lg font-bold">{rangeLabel(c.date, c.flex)}</div></div>
+            <div className="rounded-xl bg-page px-3.5 py-2.5"><div className="text-ink-3">Расстояние</div><div className="text-lg font-bold">≈ {nf(km(c.from, c.to))} км</div></div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <div className="text-ink-3">{c.deal ? "Цена сделки" : c.priceMode === "fixed" ? "Цена клиента" : "Цена"}</div>
+              <div className="text-[1.9rem] font-bold leading-tight tnum">{c.deal ? money(c.deal.price) : c.priceMode === "fixed" && c.price ? money(c.price) : "Ждут предложений"}</div>
+              {!c.deal && <div className="text-ink-3">Обычно на этом направлении: {money(hint.lo)} – {money(hint.hi)} (оценка)</div>}
+            </div>
+            {c.urgent && <Pill tone="bad">Срочно</Pill>}
+          </div>
+        </Card>
+
+        {owner && isOpen(c.status) && <OwnerOffers c={c} />}
+        {role === "carrier" && !myTrip && <CarrierSide c={c} />}
+        {(owner || myTrip) && c.deal && dealTruck && <Deal c={c} t={dealTruck} side={owner ? "client" : "carrier"} />}
+
+        <Details c={c} />
+        {role === "carrier" && <ClientBlock id={c.clientId} />}
+      </Page>
+    </>
+  );
+}
+
+/* ---------- details (spec §5) ---------- */
+
+function Details({ c }: { c: Cargo }) {
+  return (
+    <>
+      <H2>Груз</H2>
+      <Card className="px-4">
+        <Row label="Что везём">{c.title}</Row>
+        <Row label="Категория">{CATEGORIES[c.category] ?? "—"}</Row>
+        <Row label="Вес">{tons(c.weight)}</Row>
+        <Row label="Объём">{c.volume ? `${c.volume} м³` : "—"}</Row>
+        {!!c.places && <Row label="Мест / паллет">{c.places}</Row>}
+        {c.dims && <Row label="Размеры">{c.dims}</Row>}
+        {c.packaging && <Row label="Упаковка">{PACKAGING[c.packaging]}</Row>}
+        {c.stackable !== undefined && <Row label="Штабелировать">{c.stackable ? "Можно" : "Нельзя"}</Row>}
+        {c.note && <Row label="Особенности">{c.note}</Row>}
+      </Card>
+      <H2>Какая нужна машина</H2>
+      <Card className="px-4">
+        <Row label="Кузов">{c.bodies.length ? c.bodies.map((b) => BODIES[b].name).join(", ") : "Любой"}</Row>
+        {c.temp && <Row label="Температура">{c.temp[0]}…{c.temp[1]} °C</Row>}
+        {!!c.loading?.length && <Row label="Загрузка">{c.loading.map((l) => LOADING[l]).join(", ")}</Row>}
+        {!!c.extras?.length && <Row label="Особые требования">{c.extras.filter((e) => EXTRAS.includes(e)).join(", ")}</Row>}
+      </Card>
+      <H2>Таможня</H2>
+      <Card className="px-4">
+        <Row label="Где оформление">{customsLabel(c)}</Row>
+        <Row label="Перевозка">{isIntl(c) ? "Международная" : "По Казахстану"}</Row>
+      </Card>
+    </>
+  );
+}
+
+function ClientBlock({ id }: { id: string }) {
+  const { s } = useStore();
+  const k = clientOf(s, id);
+  return (
+    <>
+      <H2>Клиент</H2>
+      <Link href={`/client/${k.id}`} className="flex items-center gap-3 rounded-2xl border border-line bg-white p-4 active:bg-page">
+        <Avatar name={k.company ?? k.name} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-lg font-semibold">{k.company ?? k.name}</div>
+          <div className="text-ink-3"><Stars value={k.rating} /> · {count(k.deals, ["перевозка", "перевозки", "перевозок"])}</div>
+        </div>
+        <Verified ok={k.verified} />
+      </Link>
+    </>
+  );
+}
+
+/* ---------- client: offers + matching trucks ---------- */
+
+function OwnerOffers({ c }: { c: Cargo }) {
+  const { s, choose, proposeToTruck, openChat, toast } = useStore();
   const router = useRouter();
-  const { state, acceptOffer, placeBid, openChat, toast } = useStore();
-  const c = state.cargo.find((x) => x.id === id);
-  const [counter, setCounter] = useState<number | null>(null);
-  const [justSealed, setJustSealed] = useState(false);
+  const [confirm, setConfirm] = useState<Offer | null>(null);
+  const bids = c.offers.filter((o) => o.by === "carrier" && o.status === "new").sort((a, b) => a.price - b.price);
+  const sent = c.offers.filter((o) => o.by === "client" && o.status === "new");
+  const matches = matchTrucks(s, c).filter((m) => !c.offers.some((o) => o.truckId === m.t.id && o.status !== "declined"));
+  const chat = (driverId: string) => router.push(`/chats/${openChat(c.clientId, driverId, c.id)}`);
+  const ct = confirm ? truckOf(s, confirm.truckId) : undefined;
+  return (
+    <>
+      <H2 right={bids.length ? <span className="text-ink-3">дешевле сверху</span> : undefined}>{bids.length ? `Предложения: ${bids.length}` : "Ждём предложений"}</H2>
+      {!bids.length && (
+        <Card className="relative overflow-hidden p-5">
+          <div className="scan absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-brand-soft to-transparent" aria-hidden />
+          <p className="relative text-lg text-ink-2">Водители уже видят заявку. Как только кто-то предложит цену — покажем здесь и пришлём уведомление.</p>
+        </Card>
+      )}
+      <div className="grid gap-3">
+        {bids.map((o) => {
+          const t = truckOf(s, o.truckId);
+          if (!t) return null;
+          const d = driverOf(s, t.driverId);
+          const diff = c.price ? o.price - c.price : 0;
+          return (
+            <Card key={o.id} as="article" className="p-4">
+              <Link href={`/driver/${d.id}`} className="flex items-center gap-3">
+                <Avatar name={d.name} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-lg font-semibold">{d.name}</div>
+                  <div className="text-ink-3"><Stars value={d.rating} /> · {count(d.trips, ["перевозка", "перевозки", "перевозок"])}</div>
+                </div>
+                <span className="text-ink-3">{ago(o.at)}</span>
+              </Link>
+              <div className="mt-3 flex items-center gap-3 rounded-xl bg-page p-2.5">
+                <span className="w-20 shrink-0"><TruckArt body={t.body} kind={t.kind} /></span>
+                <span className="min-w-0">
+                  <span className="block font-semibold">{BODIES[t.body].name}, {tons(t.capacity)}{t.volume ? ` · ${t.volume} м³` : ""}</span>
+                  <span className="block truncate text-ink-3">{t.make} {t.model}</span>
+                </span>
+              </div>
+              {o.note && <p className="mt-3 text-lg">«{o.note}»</p>}
+              <div className="mt-3"><FitBadge fit={fit(t, c)} /></div>
+              <div className="mt-3 flex items-end justify-between gap-3 border-t border-line pt-3">
+                <div>
+                  <div className="text-[1.75rem] font-bold leading-none tnum">{money(o.price)}</div>
+                  {!!diff && <div className={`mt-1 font-semibold ${diff > 0 ? "text-bad" : "text-ok"}`}>{diff > 0 ? "дороже" : "дешевле"} вашей цены на {money(Math.abs(diff))}</div>}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
+                <Button variant="outline" onClick={() => chat(d.id)} aria-label={`Написать: ${d.name}`}><MessageCircle size={22} /> Написать</Button>
+                <Button onClick={() => setConfirm(o)}>Выбрать</Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
 
-  if (!c) return (<><Bar title="Груз" /><div className="mx-auto max-w-xl p-4"><Empty title="Груз не найден" body="Возможно, его уже сняли с биржи." href="/" cta="В ленту" /></div></>);
+      {sent.length > 0 && (
+        <>
+          <H2>Вы предложили груз</H2>
+          <div className="grid gap-2">
+            {sent.map((o) => {
+              const t = truckOf(s, o.truckId);
+              return t ? <Card key={o.id} className="flex items-center justify-between gap-3 p-4"><span className="font-semibold">{driverOf(s, t.driverId).name} · {t.make}</span><Pill tone="warn">Ждём ответа</Pill></Card> : null;
+            })}
+          </div>
+        </>
+      )}
 
-  const k = client(c.clientId);
-  const dist = km(c.from, c.to);
-  const est = suggestPrice(c.from, c.to, c.body, c.weight);
-  const iAmDriver = state.role === "driver" && !c.mine;
-  const dealDriver = c.dealDriverId ? driver(c.dealDriverId) : null;
-  const sealedForMe = c.status === "sealed" && (c.mine || c.dealDriverId === "me-driver");
+      <H2>{matches.length ? `Подходящие машины: ${matches.length}` : "Подходящих машин пока нет"}</H2>
+      {matches.length ? (
+        <div className="grid gap-3">
+          {matches.slice(0, 6).map(({ t, f }) => {
+            const d = driverOf(s, t.driverId);
+            return (
+              <Card key={t.id} className="p-4">
+                <Link href={`/truck/${t.id}`} className="flex items-start gap-3">
+                  <span className="w-24 shrink-0 rounded-xl bg-brand-soft/60 p-1"><TruckArt body={t.body} kind={t.kind} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{BODIES[t.body].name}, {tons(t.capacity)}{t.volume ? ` · ${t.volume} м³` : ""}</span>
+                    <span className="block text-ink-3">{d.name} · <Stars value={d.rating} /></span>
+                  </span>
+                  <FitBadge fit={f} />
+                </Link>
+                <div className="mt-3"><FitChecks fit={f} /></div>
+                <Button variant="secondary" full className="mt-3" onClick={() => { proposeToTruck(c.id, t.id); toast({ title: "Предложение отправлено", body: `${d.name} получит вашу заявку. Ответ придёт в уведомления.` }); }}>
+                  Предложить груз этой машине
+                </Button>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="px-1 text-ink-3">Сообщим, как только появится машина по вашему маршруту и датам.</p>
+      )}
 
-  const chatWithDriver = (driverId: string) => router.push(`/chats/${openChat("client", driverId, { from: c.from, to: c.to, price: c.price })}`);
-  const chatWithClient = () => router.push(`/chats/${openChat("driver", c.clientId, { from: c.from, to: c.to, price: c.bid?.price ?? c.price })}`);
+      <Sheet open={!!confirm} onClose={() => setConfirm(null)} title="Выбрать перевозчика?"
+        footer={<Button full onClick={() => { if (confirm) { choose(c.id, confirm.id); toast({ title: "Перевозчик выбран", body: "Открыли чат с водителем. Статус перевозки — на этой странице." }); } setConfirm(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Да, выбрать за {confirm ? money(confirm.price) : ""}</Button>}>
+        {confirm && ct && (
+          <div className="grid gap-3 text-lg">
+            <p>{driverOf(s, ct.driverId).name}, {ct.make} {ct.model}.</p>
+            <p className="text-ink-2">Остальным водителям сообщим, что вы выбрали другого. Дальше — договоритесь о загрузке в чате.</p>
+          </div>
+        )}
+      </Sheet>
+    </>
+  );
+}
+
+/* ---------- carrier: fit, bid, take ---------- */
+
+function CarrierSide({ c }: { c: Cargo }) {
+  const { s, bid, answerProposal, openChat, toast } = useStore();
+  const router = useRouter();
+  const mine = s.trucks.filter((t) => t.carrierId === ME_CARRIER);
+  const fits = mine.map((t) => ({ t, f: fit(t, c) }));
+  const best = [...fits].sort((a, b) => (a.f.level === "full" ? 0 : a.f.level === "partial" ? 1 : 2) - (b.f.level === "full" ? 0 : b.f.level === "partial" ? 1 : 2))[0];
+  const [truckId, setTruckId] = useState(s.q.carrier.truckId && mine.some((t) => t.id === s.q.carrier.truckId) ? s.q.carrier.truckId : best?.t.id);
+  const [sheet, setSheet] = useState(false);
+  const hint = priceHint(c.from, c.to, c.weight);
+  const [price, setPrice] = useState(c.price ?? round10k((hint.lo + hint.hi) / 2));
+  const [notes, setNotes] = useState<string[]>([]);
+  const t = mine.find((x) => x.id === truckId);
+  const f = t ? fit(t, c) : undefined;
+  const myIds = new Set(mine.map((x) => x.id));
+  const myBid = c.offers.find((o) => o.by === "carrier" && myIds.has(o.truckId) && o.status !== "accepted");
+  const proposal = c.offers.find((o) => o.by === "client" && o.status === "new" && myIds.has(o.truckId));
+  const taken = !isOpen(c.status);
+  const k = clientOf(s, c.clientId);
+  const chat = () => t && router.push(`/chats/${openChat(c.clientId, t.driverId, c.id)}`);
+
+  if (taken) return <Card className="mt-3 p-5"><p className="text-lg font-semibold">Этот груз уже забрал другой перевозчик.</p><p className="text-ink-3">Посмотрите похожие грузы в поиске.</p></Card>;
+
+  const send = (p: number) => {
+    if (!t) return;
+    bid(c.id, t.id, p, notes.join(", ") || undefined);
+    setSheet(false);
+    toast({ title: "Предложение отправлено", body: `${k.company ?? k.name} получит вашу цену ${money(p)}. Ответ придёт в уведомления.` });
+  };
 
   return (
-    <main>
-      <Bar title={c.mine ? "Ваш груз" : k.company} sub={`${c.what}`} />
-      {/* door panel */}
-      <section className="corrugated relative text-white">
-        <div className="mx-auto max-w-xl px-4 pb-6 pt-2">
-          <Route from={c.from} to={c.to} size="lg" light />
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-semibold text-oxide-soft">
-            <span>{num(dist)} км</span><span aria-hidden>·</span><span>погрузка {dayLabel(c.date).toLowerCase()}</span><span aria-hidden>·</span><span>{ago(c.at)}</span>
+    <>
+      {proposal && (
+        <Card className="mt-3 border-2 border-brand p-5">
+          <div className="text-xl font-bold">Клиент предлагает этот груз вам</div>
+          <p className="mt-1 text-lg text-ink-2">Для машины {truckOf(s, proposal.truckId)?.make} {truckOf(s, proposal.truckId)?.model} за <b className="text-ink">{money(proposal.price)}</b></p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => answerProposal(c.id, proposal.id, false)}>Отказаться</Button>
+            <Button onClick={() => { const id = answerProposal(c.id, proposal.id, true); toast({ title: "Груз ваш", body: "Открыли чат с клиентом. Не забудьте отметить выезд на загрузку." }); if (id) router.push(`/cargo/${c.id}`); }}>Беру</Button>
           </div>
-          <div className="mt-5 flex items-end justify-between gap-3">
-            <div>
-              <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-oxide-soft">{c.status === "sealed" ? "Цена сделки" : "Цена клиента"}</div>
-              <div className="font-display text-[44px] font-extrabold leading-none tabular-nums">{money(c.dealPrice ?? c.price)}</div>
-              <div className="mt-1 text-[13px] font-semibold text-oxide-soft">≈ {perKm(c.dealPrice ?? c.price, c.from, c.to)} ₸/км · оценка рынка {money(est)}</div>
-            </div>
-            {c.status === "sealed" && c.seal && <Seal code={c.seal} animate={justSealed} small />}
-          </div>
-        </div>
-      </section>
+        </Card>
+      )}
 
-      <div className="mx-auto max-w-xl px-3">
-        <div className="relative -mt-3 rounded-[3px] border border-line bg-white p-4 shadow-[0_6px_16px_-10px_rgba(0,0,0,0.3)]">
-          <Castings />
-          <p className="text-[17px] font-bold leading-snug">{c.what}</p>
-          <div className="mt-3">
-            <DataPlate items={[["Вес", `${c.weight} т`], ["Объём", c.volume ? `${c.volume} м³` : "—"], ["Кузов", BODIES[c.body].name]]} />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5"><CustomsTag c={c.customs} /><Tag>{dayLabel(c.date)}</Tag></div>
-          <p className="mt-2 text-[13.5px] text-ink-3">{CUSTOMS[c.customs].hint}</p>
-          {c.comment && <p className="mt-3 border-t border-dashed border-line pt-3 text-[15px] leading-relaxed text-ink-2">{c.comment}</p>}
-        </div>
+      <H2>Подходит ли вашей машине</H2>
+      {mine.length > 1 && (
+        <div className="-mt-1 mb-3"><Choice options={mine.map((x): [string, string] => [x.id, `${x.make} ${x.model}`])} value={truckId} onChange={setTruckId} /></div>
+      )}
+      {t && f ? (
+        <Card className="p-4">
+          <div className="mb-3 flex items-center justify-between gap-2"><span className="font-semibold">{t.make} {t.model} · {t.plate}</span><FitBadge fit={f} /></div>
+          <FitChecks fit={f} />
+        </Card>
+      ) : (
+        <Empty title="Добавьте машину" text="Чтобы откликаться на грузы, добавьте свою машину." action={<Link className="font-semibold text-brand" href="/fleet/add">Добавить машину</Link>} />
+      )}
 
-        {!c.mine && (
-          <div className="mt-3 flex items-center gap-3 rounded-[3px] border border-line bg-white p-3.5">
-            <Avatar name={k.company} kind="client" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-bold">{k.company}</div>
-              <div className="text-[13px] text-ink-3">{k.name}</div>
-              <Rating value={k.rating} sub={`${k.deals} ${plural(k.deals, ["сделка", "сделки", "сделок"])}`} />
-            </div>
-            {state.role === "driver" && (
-              <button onClick={chatWithClient} aria-label="Написать клиенту" className="grid size-11 place-items-center rounded-[4px] border-2 border-ink active:bg-yard"><MessageCircle size={20} /></button>
-            )}
-          </div>
-        )}
+      {myBid && (
+        <Card className={`mt-3 p-4 ${myBid.status === "declined" ? "" : "border-2 border-brand"}`}>
+          {myBid.status === "new" ? (
+            <>
+              <div className="text-lg font-semibold">Ваше предложение: {money(myBid.price)}</div>
+              <p className="text-ink-3">Ждём ответа клиента. Можно изменить цену.</p>
+            </>
+          ) : (
+            <>
+              <div className="text-lg font-semibold">Клиент выбрал другое предложение</div>
+              <p className="text-ink-3">Можно предложить снова, ближе к {money(c.price ?? hint.lo)}.</p>
+            </>
+          )}
+        </Card>
+      )}
 
-        {/* ------- sealed deal ------- */}
-        {sealedForMe && dealDriver && (
-          <div className="mt-3 rounded-[3px] border-2 border-seal bg-seal-soft p-4">
-            <div className="flex items-center gap-2 text-[15px] font-extrabold text-seal"><Check size={18} strokeWidth={3} /> Сделка опломбирована · {c.seal}</div>
-            {c.mine ? (
-              <div className="mt-3 flex items-center gap-3">
-                <Avatar name={dealDriver.name} kind="driver" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-bold">{dealDriver.name}</div>
-                  <div className="mt-1"><Plate plate={dealDriver.plate} /></div>
-                </div>
+      {t && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
+          <div className="mx-auto grid max-w-xl grid-cols-[auto_auto_1fr] gap-2 px-3">
+            <Button variant="outline" onClick={() => toast({ title: demoCall, body: `${k.company ?? k.name}` })} aria-label="Позвонить клиенту"><Phone size={22} /></Button>
+            <Button variant="outline" onClick={chat} aria-label="Написать клиенту"><MessageCircle size={22} /></Button>
+            {c.priceMode === "fixed" && c.price && !myBid ? (
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Button onClick={() => send(c.price!)}>Взять за {money(c.price)}</Button>
+                <Button variant="secondary" onClick={() => setSheet(true)} className="px-3">Своя цена</Button>
               </div>
             ) : (
-              <p className="mt-1 text-[14px] text-ink-2">Клиент ждёт вас на погрузке. Детали — в чате.</p>
+              <Button onClick={() => setSheet(true)}>{myBid?.status === "new" ? "Изменить цену" : "Предложить цену"}</Button>
             )}
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button onClick={() => (c.mine ? chatWithDriver(dealDriver.id) : chatWithClient())} className="flex items-center justify-center gap-2 rounded-[4px] bg-ink py-3 text-[15px] font-extrabold text-white active:bg-ink-2">
-                <MessageCircle size={18} /> Чат
-              </button>
-              <button onClick={() => toast({ title: "Демо-режим", body: "Звонки появятся вместе с бэкендом." })} className="flex items-center justify-center gap-2 rounded-[4px] border-2 border-ink bg-white py-3 text-[15px] font-extrabold active:bg-yard">
-                <Phone size={18} /> Позвонить
-              </button>
+          </div>
+        </div>
+      )}
+
+      <Sheet open={sheet} onClose={() => setSheet(false)} title="Ваша цена" footer={<Button full disabled={!price} onClick={() => send(price)}>Отправить {money(price)}</Button>}>
+        <div className="grid gap-5 pt-2">
+          <div>
+            <Stepper value={price} onChange={setPrice} step={10000} min={10000} unit="₸" label="Цена в тенге" big />
+            <p className="mt-2 text-ink-3">{c.price ? `Клиент предлагает ${money(c.price)}. ` : ""}Обычно на этом направлении {money(hint.lo)} – {money(hint.hi)}.</p>
+            <div className="mt-3 flex gap-2">
+              {[-0.05, 0.05, 0.1].map((p) => <Button key={p} variant="outline" size="md" className="flex-1" onClick={() => setPrice(round10k((c.price ?? price) * (1 + p)))}>{p > 0 ? "+" : "−"}{Math.abs(p * 100)}%</Button>)}
             </div>
           </div>
-        )}
-
-        {/* ------- client: offers from drivers ------- */}
-        {c.mine && c.status === "open" && (
-          <section className="mt-6">
-            <h2 className="mb-3 px-1 text-[20px] font-extrabold">
-              {c.offers.length ? `${c.offers.length} ${plural(c.offers.length, ["предложение", "предложения", "предложений"])} от водителей` : "Ищем водителей"}
-            </h2>
-            {!c.offers.length && (
-              <div className="relative overflow-hidden rounded-[3px] border border-line bg-white p-5">
-                <div className="sweep absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-signal/30 to-transparent" aria-hidden />
-                <p className="relative text-[15px] font-semibold text-ink-2">Груз опубликован. Водители рядом с {c.from === "khorgos" ? "Хоргосом" : "точкой погрузки"} уже видят его — предложения появятся здесь.</p>
+          {mine.length > 1 && (
+            <div>
+              <div className="mb-2 text-lg font-bold">Какая машина поедет</div>
+              <div className="grid gap-2">
+                {fits.map(({ t: x, f: xf }) => <Option key={x.id} selected={truckId === x.id} onClick={() => setTruckId(x.id)} icon={<TruckIcon size={24} />} title={`${x.make} ${x.model}`} hint={xf.level === "full" ? "Подходит" : xf.level === "partial" ? "Почти подходит" : xf.checks.find((ch) => !ch.ok)?.text} />)}
               </div>
-            )}
-            <div className="grid gap-3">
-              {c.offers.map((o) => {
-                const d = driver(o.driverId);
-                const diff = o.price - c.price;
-                return (
-                  <article key={o.id} className="toast-in rounded-[3px] border border-line bg-white p-4 shadow-[0_6px_16px_-12px_rgba(0,0,0,0.3)]">
-                    <div className="flex items-start gap-3">
-                      <Avatar name={d.name} kind="driver" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[16px] font-bold">{d.name}</span>
-                          <span className="shrink-0 text-[12.5px] text-ink-3">{ago(o.at)}</span>
-                        </div>
-                        <Rating value={d.rating} sub={`${d.trips} рейсов · ${d.years} лет`} />
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><Plate plate={d.plate} />{d.docs.map((x) => <Tag key={x}>{x}</Tag>)}</div>
-                        <div className="mt-1 text-[13.5px] text-ink-2">{d.truck}</div>
-                      </div>
-                    </div>
-                    <p className="mt-3 rounded-[3px] bg-[#f3f4f3] px-3 py-2 text-[14.5px] text-ink-2">«{o.note}»</p>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-display text-[30px] font-extrabold leading-none tabular-nums">{money(o.price)}</div>
-                        <div className={`mt-1 text-[13px] font-bold ${diff > 0 ? "text-oxide" : diff < 0 ? "text-seal" : "text-ink-3"}`}>
-                          {diff === 0 ? "ваша цена" : `${diff > 0 ? "+" : "−"}${money(Math.abs(diff))} к вашей цене`}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => chatWithDriver(d.id)} aria-label={`Написать: ${d.name}`} className="grid size-12 place-items-center rounded-[4px] border-2 border-ink active:bg-yard"><MessageCircle size={20} /></button>
-                        <button
-                          onClick={() => { setJustSealed(true); acceptOffer(c.id, o.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                          className="rounded-[4px] border-2 border-ink bg-signal px-4 text-[15px] font-extrabold active:bg-signal-deep"
-                        >
-                          Принять
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
             </div>
-          </section>
-        )}
+          )}
+          <div>
+            <div className="mb-2 text-lg font-bold">Добавить к предложению</div>
+            <Choice multi options={["Могу загрузиться в срок", "Есть TIR и CMR", "Опыт на этом маршруте", "Могу раньше"].map((n): [string, string] => [n, n])} value={notes} onChange={(v) => setNotes(notes.includes(v) ? notes.filter((x) => x !== v) : [...notes, v])} />
+          </div>
+        </div>
+      </Sheet>
+    </>
+  );
+}
 
-        {/* ------- driver: accept or counter ------- */}
-        {iAmDriver && c.status === "open" && (
-          <section className="mt-6">
-            {c.bid?.status === "pending" ? (
-              <div className="relative overflow-hidden rounded-[3px] border-2 border-ink bg-white p-4">
-                <div className="sweep absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-signal/40 to-transparent" aria-hidden />
-                <div className="relative">
-                  <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-ink-3">Ваше предложение отправлено</div>
-                  <div className="font-display text-[32px] font-extrabold leading-tight">{money(c.bid.price)}</div>
-                  <p className="text-[14px] text-ink-2">Ждём ответа клиента. Уведомим, как только он решит.</p>
-                </div>
-              </div>
-            ) : c.bid?.status === "declined" ? (
-              <div className="rounded-[3px] border border-line bg-white p-4">
-                <div className="text-[15px] font-extrabold">Клиент выбрал другое предложение</div>
-                <p className="mt-1 text-[14px] text-ink-2">Ваша цена {money(c.bid.price)} оказалась выше, чем он готов платить. Можно предложить снова.</p>
-                <button onClick={() => setCounter(c.price)} className="mt-3 rounded-[4px] border-2 border-ink px-4 py-2.5 text-[15px] font-extrabold active:bg-yard">Предложить ещё раз</button>
-              </div>
-            ) : null}
+/* ---------- deal: status, contacts, next step, ratings ---------- */
 
-            {(!c.bid || c.bid.status === "declined") && (
-              <div className="mt-3 grid gap-2.5">
-                {counter === null ? (
-                  <>
-                    <button onClick={() => placeBid(c.id, c.price)} className="rounded-[5px] border-2 border-ink bg-signal py-4 text-[18px] font-extrabold shadow-[0_8px_18px_-10px_rgba(0,0,0,0.5)] active:translate-y-px active:bg-signal-deep">
-                      Принять за {money(c.price)}
-                    </button>
-                    <button onClick={() => setCounter(Math.round((c.price * 1.05) / 10000) * 10000)} className="rounded-[5px] border-2 border-ink bg-white py-3.5 text-[16px] font-extrabold active:bg-yard">
-                      Предложить свою цену
-                    </button>
-                  </>
-                ) : (
-                  <div className="rounded-[3px] border border-line bg-white p-4">
-                    <div className="mb-3 text-[16px] font-extrabold">Ваша цена</div>
-                    <Stepper value={counter} onChange={setCounter} label="Ваша цена в тенге" />
-                    <div className="mt-2.5 flex gap-2">
-                      {[-0.05, 0.05, 0.1].map((p) => (
-                        <button key={p} onClick={() => setCounter(Math.round((c.price * (1 + p)) / 10000) * 10000)} className="flex-1 rounded-[4px] border-2 border-line py-2 text-[14px] font-bold active:border-ink">
-                          {p > 0 ? "+" : "−"}{Math.abs(p * 100)}%
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-2.5 text-[13px] text-ink-3">≈ {perKm(counter, c.from, c.to)} ₸/км. Клиент предлагает {money(c.price)}.</p>
-                    <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
-                      <button onClick={() => setCounter(null)} className="rounded-[4px] border-2 border-line px-4 text-[15px] font-bold active:border-ink">Отмена</button>
-                      <button onClick={() => { placeBid(c.id, counter); setCounter(null); }} className="rounded-[4px] border-2 border-ink bg-signal py-3.5 text-[16px] font-extrabold active:bg-signal-deep">
-                        Отправить {money(counter)}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
+function Deal({ c, t, side }: { c: Cargo; t: Truck; side: "client" | "carrier" }) {
+  const { s, advance, openChat, toast } = useStore();
+  const router = useRouter();
+  const d = driverOf(s, t.driverId);
+  const k = clientOf(s, c.clientId);
+  const step = CARRIER_STEP[c.status];
+  const simulated = side === "client" && t.carrierId !== ME_CARRIER;
+  const chat = () => router.push(`/chats/${openChat(c.clientId, t.driverId, c.id)}`);
+  return (
+    <>
+      <H2>{side === "client" ? "Перевозчик" : "Клиент"}</H2>
+      <Card className="p-4">
+        <Link href={side === "client" ? `/driver/${d.id}` : `/client/${k.id}`} className="flex items-center gap-3">
+          <Avatar name={side === "client" ? d.name : k.company ?? k.name} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-lg font-semibold">{side === "client" ? d.name : k.company ?? k.name}</div>
+            <div className="text-ink-3"><Stars value={side === "client" ? d.rating : k.rating} /> · {side === "client" ? `${t.make} ${t.model}` : k.name}</div>
+          </div>
+        </Link>
+        {side === "client" && <div className="mt-3 flex items-center gap-2"><Plate plate={t.plate} cn={t.cnPlate} /><span className="text-ink-3">{BODIES[t.body].name}, {tons(t.capacity)}</span></div>}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button variant="outline" onClick={() => toast({ title: demoCall, body: side === "client" ? d.name : k.company ?? k.name })}><Phone size={22} /> Позвонить</Button>
+          <Button variant="secondary" onClick={chat}><MessageCircle size={22} /> Написать</Button>
+        </div>
+      </Card>
 
-        {state.role === "client" && !c.mine && (
-          <p className="mt-4 rounded-[3px] bg-white/60 px-4 py-3 text-[14px] text-ink-2">Это груз другого клиента. Переключитесь в режим «Водитель», чтобы взять его или предложить цену.</p>
+      <H2>Статус перевозки</H2>
+      <Card className="p-5">
+        <Timeline status={c.status} log={c.log} intl={isIntl(c)} />
+        {side === "carrier" && step && (
+          <Button full className="mt-2" onClick={() => { advance(c.id); toast({ title: "Статус обновлён", body: "Клиент получит уведомление." }); }}>
+            <Check size={22} strokeWidth={3} /> {step}
+          </Button>
         )}
-        {c.mine && c.status === "open" && (
-          <p className="mt-4 px-1 text-[13px] text-ink-3">Оценка рынка {money(est)} — приблизительный расчёт по расстоянию и кузову, не гарантия цены.</p>
+        {simulated && step && (
+          <Button variant="ghost" full className="mt-1" onClick={() => advance(c.id)}>Демо: следующий этап</Button>
         )}
-        <div className="h-6" />
-        <Link href="/" className="sr-only">В ленту</Link>
-      </div>
-    </main>
+        {side === "client" && step && !simulated && <p className="mt-2 text-ink-3">Статус меняет водитель. Вы получите уведомление.</p>}
+      </Card>
+
+      {(c.status === "done" || c.status === "rated") && <Ratings c={c} side={side} />}
+    </>
+  );
+}
+
+function Ratings({ c, side }: { c: Cargo; side: "client" | "carrier" }) {
+  const { rate, toast } = useStore();
+  const criteria = side === "client" ? RATE_CARRIER : RATE_CLIENT;
+  const [scores, setScores] = useState<number[]>(criteria.map(() => 0));
+  const [text, setText] = useState("");
+  const mine = side === "client" ? c.byClient : c.byCarrier;
+  const theirs = side === "client" ? c.byCarrier : c.byClient;
+  const ready = scores.every((x) => x > 0);
+  return (
+    <>
+      <H2>{mine ? "Ваш отзыв" : side === "client" ? "Оцените перевозчика" : "Оцените клиента"}</H2>
+      {mine ? (
+        <Card className="p-4">
+          <div className="grid gap-1">{criteria.map((cr, i) => <div key={cr} className="flex justify-between"><span className="text-ink-2">{cr}</span><Stars value={mine.scores[i]} /></div>)}</div>
+          {mine.text && <p className="mt-3 text-lg">«{mine.text}»</p>}
+        </Card>
+      ) : (
+        <Card className="grid gap-4 p-4">
+          <p className="text-ink-3">Отзыв увидят другие {side === "client" ? "клиенты" : "перевозчики"}. Он привязан к этой перевозке.</p>
+          {criteria.map((cr, i) => <StarInput key={cr} label={cr} value={scores[i]} onChange={(n) => setScores(scores.map((x, j) => (j === i ? n : x)))} />)}
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Пара слов (необязательно)" aria-label="Комментарий к отзыву" className={`${inputCls} h-auto py-3`} />
+          <Button full disabled={!ready} onClick={() => { rate(c.id, side, scores, text); toast({ title: "Спасибо за отзыв", body: "Оценка сохранена в профиле." }); }}>{ready ? "Отправить отзыв" : "Поставьте оценки"}</Button>
+        </Card>
+      )}
+      {theirs && (
+        <>
+          <H2>{side === "client" ? "Отзыв перевозчика о вас" : "Отзыв клиента о вас"}</H2>
+          <Card className="p-4">
+            <div className="grid gap-1">{(side === "client" ? RATE_CLIENT : RATE_CARRIER).map((cr, i) => <div key={cr} className="flex justify-between"><span className="text-ink-2">{cr}</span><Stars value={theirs.scores[i]} /></div>)}</div>
+            {theirs.text && <p className="mt-3 text-lg">«{theirs.text}»</p>}
+          </Card>
+        </>
+      )}
+    </>
   );
 }

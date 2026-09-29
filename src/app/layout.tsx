@@ -1,19 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Sofia_Sans, Sofia_Sans_Extra_Condensed } from "next/font/google";
+import { Golos_Text } from "next/font/google";
 import { StoreProvider } from "@/lib/store";
 import { Shell } from "@/components/shell";
 import "./globals.css";
 
-const body = Sofia_Sans({ variable: "--font-body", subsets: ["latin", "cyrillic"] });
-const cond = Sofia_Sans_Extra_Condensed({ variable: "--font-cond", subsets: ["latin", "cyrillic"] });
+const golos = Golos_Text({ variable: "--font-golos", subsets: ["latin", "cyrillic"] });
 
 export const metadata: Metadata = {
-  title: { default: "Keruen — грузы и машины через Хоргос", template: "%s · Keruen" },
-  description: "Биржа грузоперевозок: клиент называет цену, водитель принимает или торгуется.",
+  title: { default: "Keruen — грузы и машины Китай — Казахстан", template: "%s · Keruen" },
+  description: "Найдите машину для груза или груз для машины. Китай — Казахстан и по стране.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#a2391f",
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -21,15 +20,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ru" className={`${body.variable} ${cond.variable} antialiased`}>
+    <html lang="ru" className={`${golos.variable} antialiased`}>
       <body className="min-h-dvh font-sans">
         {/*
-          THESIS: a freight board for the Khorgos corridor where the route and the price are read first, not a generic blue logistics dashboard.
-          OWN-WORLD: Khorgos dry-port yard. Oxide-red corrugated container steel for headers, concrete ground, white door panels with corner castings,
-          loads drawn as container door markings, trucks as KZ licence plates, hi-vis seal yellow for the one action, seal green for sealed deals, stamp-ink blue for customs.
-          STORY: client posts a load with a price → drivers accept or counter → client accepts → deal gets a bolt seal → chat. Drivers post a free truck → it pops up for clients.
-          FIRST VIEWPORT: oxide panel with greeting + yellow primary action; below, the live feed of trucks (client) or loads (driver).
-          FORM: grounded candidate 4 (container stencils & door markings), seed b28cf44f.
+          THESIS: a freight board that a driver who hates apps can use — one question per screen, big type, and the app says WHY a truck or a load fits.
+          OWN-WORLD: white screens on a pale blue-grey page, one calm blue (#1d5be0) for every action, green only for "fits / verified", no decoration.
+          STORY: client describes cargo → sees matching trucks with reasons → compares bids → chooses → tracks status → rates. Carrier: says where/when the truck is free → gets matching loads → bids.
+          FIRST VIEWPORT: Yandex-minimal — a heading and one route box (Откуда / Куда) with one big blue button; frequent routes under it.
+          FORM: brief-pinned (white-blue minimal; Yandex search; inDrive filters; DAT One processes) — no direction roll.
           FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
         */}
         <StoreProvider>
