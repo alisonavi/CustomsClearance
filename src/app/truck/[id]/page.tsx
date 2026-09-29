@@ -32,7 +32,7 @@ export default function TruckPage() {
   return (
     <>
       <TopBar title="Машина" />
-      <Page className="px-3 pb-36 pt-3">
+      <Page className="px-3 pb-48 pt-3">
         <Card className="p-5">
           <div className="rounded-2xl bg-brand-soft/60 px-4 py-3"><TruckArt body={t.body} kind={t.kind} className="mx-auto max-w-sm" /></div>
           <p className="mt-1.5 text-center text-sm text-ink-3">Иллюстрация. В рабочей версии здесь будут фото машины ({t.photos} шт.)</p>
@@ -91,10 +91,12 @@ export default function TruckPage() {
 
       {role === "client" && !mine && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
-          <div className="mx-auto grid max-w-xl grid-cols-[auto_auto_1fr] gap-2 px-3">
-            <Button variant="outline" aria-label="Позвонить водителю" onClick={() => toast({ title: "Звонок в демо-версии не совершается", body: d.name })}><Phone size={22} /></Button>
-            <Button variant="outline" aria-label="Написать водителю" onClick={() => router.push(`/chats/${openChat(ME_CLIENT, d.id, best?.c.id)}`)}><MessageCircle size={22} /></Button>
-            <Button onClick={() => setPick(true)} disabled={t.state !== "free"}>Предложить груз</Button>
+          <div className="mx-auto grid max-w-xl gap-2 px-3">
+            <Button full onClick={() => setPick(true)} disabled={t.state !== "free"}>Предложить груз</Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="md" onClick={() => router.push(`/chats/${openChat(ME_CLIENT, d.id, best?.c.id)}`)}><MessageCircle size={20} aria-hidden /> Написать</Button>
+              <Button variant="outline" size="md" onClick={() => toast({ title: "Звонок в демо-версии не совершается", body: d.name })}><Phone size={20} aria-hidden /> Позвонить</Button>
+            </div>
           </div>
         </div>
       )}

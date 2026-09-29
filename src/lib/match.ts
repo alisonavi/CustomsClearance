@@ -167,8 +167,13 @@ export function activeFilterCount(role: "client" | "carrier", s: State) {
 }
 
 /** Rough price range for a lane — labelled as an estimate, never as a quote. */
-export function priceHint(from: string, to: string, weight: number) {
-  const base = km(from, to) * 330 * (weight >= 15 ? 1 : 0.55 + (weight / 15) * 0.45) * (isIntl({ from, to }) ? 1.25 : 1);
+export function priceHint(from: string, to: string, weight: number, body?: string) {
+  const d = km(from, to);
+  const rate = 340 + 250 * Math.max(0, 1 - d / 1500); // short hauls cost more per km
+  const load = weight >= 15 ? 1 : 0.55 + (Math.max(weight, 1) / 15) * 0.45;
+  const bodyK = body === "reefer" ? 1.3 : body === "lowboy" ? 1.8 : 1;
+  const border = isIntl({ from, to }) ? 2.2 : 1; // queues, permits, the China leg
+  const base = (60000 + d * rate) * load * bodyK * border;
   const lo = Math.round((base * 0.9) / 10000) * 10000, hi = Math.round((base * 1.15) / 10000) * 10000;
   return { lo: Math.max(lo, 50000), hi: Math.max(hi, 80000) };
 }

@@ -8,7 +8,7 @@ import { useMounted, useStore } from "@/lib/store";
 import { isOpen } from "@/lib/catalog";
 import { ME_CARRIER, ME_CLIENT } from "@/lib/types";
 
-const HIDE_NAV = ["/welcome", "/new", "/fleet/add", "/chats/", "/map"];
+const HIDE_NAV = ["/welcome", "/new", "/map", "/notifications", "/chats/", "/cargo/", "/truck/", "/driver/", "/client/", "/fleet/"];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const mounted = useMounted();
@@ -49,14 +49,14 @@ function Nav() {
         { href: "/", label: "Поиск", Icon: Search },
         { href: "/orders", label: "Заявки", Icon: ClipboardList, badge: newOffers },
         { href: "/new", label: "Разместить", Icon: PlusCircle, main: true },
-        { href: "/chats", label: "Сообщения", Icon: MessageCircle, badge: unread },
+        { href: "/chats", label: "Чаты", Icon: MessageCircle, badge: unread },
         { href: "/profile", label: "Профиль", Icon: UserRound },
       ]
     : [
         { href: "/", label: "Поиск", Icon: Search },
         { href: "/orders", label: "Рейсы", Icon: Route, badge: proposals },
-        { href: "/fleet", label: "Транспорт", Icon: Truck },
-        { href: "/chats", label: "Сообщения", Icon: MessageCircle, badge: unread },
+        { href: "/fleet", label: "Машины", Icon: Truck },
+        { href: "/chats", label: "Чаты", Icon: MessageCircle, badge: unread },
         { href: "/profile", label: "Профиль", Icon: UserRound },
       ];
   return (
@@ -66,14 +66,12 @@ function Nav() {
           const on = href === "/" ? path === "/" || path === "/search" : path.startsWith(href);
           return (
             <Link key={href} href={href} aria-current={on ? "page" : undefined}
-              className={`relative flex min-h-[68px] flex-col items-center justify-center gap-1 text-[0.8rem] font-semibold ${on ? "text-brand" : "text-ink-3"}`}>
-              {main ? (
-                <span className="grid size-10 place-items-center rounded-full bg-brand text-white"><Icon size={24} strokeWidth={2.4} aria-hidden /></span>
-              ) : (
-                <Icon size={26} strokeWidth={on ? 2.5 : 2} aria-hidden />
-              )}
+              className={`relative flex min-h-[70px] flex-col items-center justify-center gap-0.5 text-[0.82rem] font-semibold ${on ? "text-brand" : "text-ink-3"}`}>
+              <span className={`grid size-10 place-items-center rounded-full ${main ? "bg-brand text-white" : ""}`}>
+                <Icon size={main ? 24 : 26} strokeWidth={main ? 2.4 : on ? 2.5 : 2} aria-hidden />
+              </span>
               {label}
-              {!!badge && <span className="absolute left-1/2 top-1.5 ml-2 grid h-5 min-w-5 place-items-center rounded-full bg-bad px-1.5 text-xs font-bold text-white">{badge}</span>}
+              {!!badge && <span className="absolute left-1/2 top-1 ml-2 grid h-5 min-w-5 place-items-center rounded-full bg-bad px-1.5 text-xs font-bold text-white">{badge}</span>}
             </Link>
           );
         })}

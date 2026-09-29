@@ -174,7 +174,7 @@ export function seedCargo(): Cargo[] {
         { id: "o8", truckId: "t6", price: 1300000, at: M(22), status: "new", by: "carrier" },
       ] }),
     cargo({ id: "k3", clientId: "c7", from: "yiwu", to: "almaty", customs: { where: "china" }, title: "Одежда и обувь", category: "textile", weight: 12, volume: 86, places: 520, packaging: "boxes", stackable: true,
-      bodies: ["tent"], date: D(9), flex: 2, priceMode: "fixed", price: 2900000, createdAt: H(1) }),
+      bodies: ["tent"], date: D(9), flex: 2, priceMode: "fixed", price: 3900000, createdAt: H(1) }),
     cargo({ id: "k4", clientId: "c2", from: "khorgos-kz", to: "shymkent", customs: { where: "border", post: "nurzholy" }, title: "Мандарины", note: "Температура +4…+6 °C, срочно", category: "food", weight: 19, volume: 70, places: 1900, packaging: "boxes",
       bodies: ["reefer"], temp: [4, 6], date: D(0), flex: 0, urgent: true, priceMode: "fixed", price: 690000, createdAt: M(50) }),
     cargo({ id: "k5", clientId: "c1", from: "urumqi", to: "shymkent", customs: { where: "post", post: "svh-shymkent" }, title: "Оборудование для цеха", note: "6 ящиков, самый тяжёлый — 5 т", category: "equipment", weight: 21, volume: 60, places: 6, packaging: "none", stackable: false,
@@ -188,8 +188,8 @@ export function seedCargo(): Cargo[] {
     cargo({ id: "k9", clientId: "c5", from: "urumqi", to: "tashkent", customs: { where: "post", post: "nurzholy" }, title: "Бытовая техника, транзит", note: "Транзит через Казахстан, нужен TIR-карнет", category: "electronics", weight: 16, volume: 82, places: 300, packaging: "boxes",
       bodies: ["tent"], date: D(9), flex: 2, createdAt: H(5) }),
     cargo({ id: "k10", clientId: "c4", from: "khorgos-cn", to: "almaty", customs: { where: "border", post: "nurzholy" }, title: "Керамическая плитка на паллетах", category: "building", weight: 19, volume: 40, places: 22, packaging: "pallets", stackable: false,
-      bodies: ["tent", "flatbed"], date: D(6), flex: 1, priceMode: "fixed", price: 430000, createdAt: H(6),
-      offers: [{ id: "o9", truckId: "t-me1", price: 430000, at: M(15), status: "new", by: "client" }] }),
+      bodies: ["tent", "flatbed"], date: D(6), flex: 1, priceMode: "fixed", price: 560000, createdAt: H(6),
+      offers: [{ id: "o9", truckId: "t-me1", price: 560000, at: M(15), status: "new", by: "client" }] }),
     // ---- the carrier persona's trips ----
     cargo({ id: "kt1", clientId: "c2", from: "almaty", to: "astana", title: "Молочная продукция", category: "food", weight: 16, volume: 60, places: 20, packaging: "pallets", bodies: ["reefer"], temp: [2, 6],
       date: D(-1), flex: 0, priceMode: "fixed", price: 820000, createdAt: DAYS(2), status: "in_transit", log: log("in_transit", DAYS(2), H(5), true),
@@ -211,9 +211,9 @@ export function seedCargo(): Cargo[] {
 export function poolCargo(): Cargo[] {
   return [
     cargo({ id: "q1", clientId: "c7", from: "khorgos-cn", to: "almaty", customs: { where: "border", post: "nurzholy" }, title: "Ткани в рулонах", category: "textile", weight: 17, volume: 80, places: 60, packaging: "none",
-      bodies: ["tent"], date: D(7), flex: 1, priceMode: "fixed", price: 450000, createdAt: Date.now() }),
+      bodies: ["tent"], date: D(7), flex: 1, priceMode: "fixed", price: 540000, createdAt: Date.now() }),
     cargo({ id: "q2", clientId: "c1", from: "khorgos-kz", to: "astana", title: "Подсолнечное масло", category: "food", weight: 20, volume: 40, places: 20, packaging: "pallets",
-      bodies: ["tent", "isotherm"], date: D(6), flex: 0, priceMode: "fixed", price: 820000, createdAt: Date.now() }),
+      bodies: ["tent", "isotherm"], date: D(6), flex: 0, priceMode: "fixed", price: 600000, createdAt: Date.now() }),
   ];
 }
 
@@ -249,7 +249,7 @@ export function seedNotifs(): Notif[] {
     n("n3", "client", "status", "Груз в пути", "Хоргос (РК) → Алматы · Нурлан Жумабаев", "/cargo/r2", H(1), true),
     n("n4", "client", "match_truck", "Нашли подходящие машины", "Для заявки Урумчи → Алматы", "/cargo/r1", M(45), true),
     n("n5", "client", "rate", "Оцените перевозку", "Урумчи → Астана завершена. Как всё прошло?", "/cargo/r3", DAYS(3), true),
-    n("n6", "carrier", "proposal", "Клиент предлагает груз", "ТОО «Атырау СтройСнаб» · Хоргос (КНР) → Алматы · 430 000 ₸", "/cargo/k10", M(15)),
+    n("n6", "carrier", "proposal", "Клиент предлагает груз", "ТОО «Атырау СтройСнаб» · Хоргос (КНР) → Алматы · 560 000 ₸", "/cargo/k10", M(15)),
     n("n7", "carrier", "match_cargo", "Подходящий груз для MAN TGX", "Урумчи → Алматы · 16 т · 1 150 000 ₸", "/cargo/k1", M(12)),
     n("n8", "carrier", "message", "Сообщение от ИП Мухамедиева", "Во сколько будете в Астане?", "/chats/ch3", M(20)),
     n("n9", "carrier", "loading_soon", "Машина скоро освободится", "MAN TGX · 482 AKB 05 свободна через 6 дней. Подберите груз заранее.", "/fleet/t-me1", H(3), true),

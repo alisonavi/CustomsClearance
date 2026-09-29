@@ -10,7 +10,7 @@ import { cityShort } from "@/lib/geo";
 import { RouteBox } from "@/components/place-picker";
 import { FilterBar } from "@/components/filters";
 import { CargoCard, TruckCard } from "@/components/cards";
-import { MapView } from "@/components/map-view";
+import { MapView, mapCity } from "@/components/map-view";
 import { Button, Empty, Page, Segmented, TopBar } from "@/components/ui";
 
 export default function SearchPage() {
@@ -28,12 +28,12 @@ export default function SearchPage() {
 
   const groups = useMemo(() => {
     const m: Record<string, number> = {};
-    (role === "client" ? trucks.map((r) => r.t.at) : cargo.map((r) => r.c.from)).forEach((id) => { m[id] = (m[id] ?? 0) + 1; });
+    (role === "client" ? trucks.map((r) => r.t.at) : cargo.map((r) => r.c.from)).forEach((id) => { const k = mapCity(id); m[k] = (m[k] ?? 0) + 1; });
     return Object.entries(m).map(([cityId, n]) => ({ cityId, count: n }));
   }, [role, trucks, cargo]);
 
-  const listTrucks = view === "map" && city ? trucks.filter((r) => r.t.at === city) : trucks;
-  const listCargo = view === "map" && city ? cargo.filter((r) => r.c.from === city) : cargo;
+  const listTrucks = view === "map" && city ? trucks.filter((r) => mapCity(r.t.at) === city) : trucks;
+  const listCargo = view === "map" && city ? cargo.filter((r) => mapCity(r.c.from) === city) : cargo;
   const noun: [string, string, string] = role === "client" ? ["машина", "машины", "машин"] : ["груз", "груза", "грузов"];
 
   return (
@@ -62,7 +62,7 @@ export default function SearchPage() {
 
         <div className="mt-5 flex items-baseline justify-between gap-3 px-1">
           <h2 className="text-xl font-bold">
-            {view === "map" && city ? `${cityShort(city)}: ${count(role === "client" ? listTrucks.length : listCargo.length, noun)}` : total ? `Нашли ${count(total, noun)}` : "Ничего не нашли"}
+            {view === "map" && city ? `${city.startsWith("khorgos") ? "Хоргос" : cityShort(city)}: ${count(role === "client" ? listTrucks.length : listCargo.length, noun)}` : total ? `Нашли ${count(total, noun)}` : "Ничего не нашли"}
           </h2>
           {view === "map" && city && <button onClick={() => setCity(undefined)} className="font-semibold text-brand">Все</button>}
         </div>

@@ -134,7 +134,8 @@ function CarrierHome() {
           <span className="w-20 shrink-0">{truck ? <TruckArt body={truck.body} kind={truck.kind} /> : <TruckIcon size={30} className="mx-auto text-ink-3" />}</span>
           <span className="min-w-0 flex-1">
             <span className="block text-[0.95rem] text-ink-3">Для какой машины</span>
-            <span className="block truncate font-semibold">{truck ? `${truck.make} ${truck.model} · ${tons(truck.capacity)}${truck.volume ? ` · ${truck.volume} м³` : ""}` : "Любая — показать все грузы"}</span>
+            <span className="block truncate font-semibold">{truck ? `${truck.make} ${truck.model}` : "Любая машина"}</span>
+            <span className="block truncate text-ink-2">{truck ? `${BODIES[truck.body].name}, ${tons(truck.capacity)}${truck.volume ? ` · ${truck.volume} м³` : ""}` : "Показать все грузы"}</span>
           </span>
           <ChevronRight size={22} className="shrink-0 text-ink-3" aria-hidden />
         </button>

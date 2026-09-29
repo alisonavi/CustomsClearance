@@ -38,7 +38,7 @@ export default function NewRequest() {
   const [i, setI] = useState(0);
   const step = steps[Math.min(i, steps.length - 1)];
   const [picker, setPicker] = useState<"from" | "to" | null>(null);
-  const hint = d.from && d.to ? priceHint(d.from, d.to, d.weight || 10) : undefined;
+  const hint = d.from && d.to ? priceHint(d.from, d.to, d.weight || 10, d.bodies[0]) : undefined;
 
   const valid: Record<Step, boolean> = {
     from: !!d.from, to: !!d.to && d.to !== d.from, customs: !!d.customs && (d.customs !== "post" || !!d.post),

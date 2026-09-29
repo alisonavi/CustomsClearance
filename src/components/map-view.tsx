@@ -7,6 +7,9 @@ import { CITIES, POIS, city } from "@/lib/geo";
 
 type Leaflet = typeof import("leaflet");
 export type MapGroup = { cityId: string; count: number };
+/** Both sides of Хоргос sit 10 km apart — one pin on the map. */
+export const mapCity = (id: string) => (id.startsWith("khorgos") ? "khorgos-kz" : id);
+const MAJOR = new Set(["almaty", "astana", "shymkent", "karaganda", "aktobe", "atyrau", "urumqi"]);
 export type Layers = { border: boolean; customs: boolean; hub: boolean };
 
 const svg = (inner: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
@@ -37,8 +40,11 @@ export function MapView({ groups, selected, onSelect, layers, onPoi }: {
       if (dead || !el.current || map.current) return;
       const L = ((mod as unknown as { default?: Leaflet }).default ?? mod) as Leaflet;
       lib.current = L;
-      const m = L.map(el.current, { zoomControl: false, minZoom: 3, maxZoom: 11 }).setView([45.5, 77], 5);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", { subdomains: "abcd", attribution: "© OpenStreetMap, © CARTO" }).addTo(m);
+      const m = L.map(el.current, { zoomControl: false, minZoom: 3, maxZoom: 12 }).setView([45.5, 77], 5);
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, attribution: "Карта © Esri" }).addTo(m);
+      const zoomClass = () => { const z = m.getZoom(); el.current?.classList.toggle("z-far", z <= 5); el.current?.classList.toggle("z-mid", z > 5 && z < 8); };
+      m.on("zoomend", zoomClass);
+      zoomClass();
       L.control.zoom({ position: "bottomright" }).addTo(m);
       pois.current = L.layerGroup().addTo(m);
       pins.current = L.layerGroup().addTo(m);
@@ -54,10 +60,10 @@ export function MapView({ groups, selected, onSelect, layers, onPoi }: {
     layer.clearLayers();
     const withPins = new Set(groups.map((g) => g.cityId));
     CITIES.filter((c) => !withPins.has(c.id) && !c.id.startsWith("khorgos")).forEach((c) =>
-      L.marker([c.lat, c.lon], { interactive: false, keyboard: false, icon: L.divIcon({ className: "", iconSize: [0, 0], html: `<div class="city-label">${esc(c.name)}</div>` }) }).addTo(layer));
+      L.marker([c.lat, c.lon], { interactive: false, keyboard: false, icon: L.divIcon({ className: "", iconSize: [0, 0], html: `<div class="city-label ${MAJOR.has(c.id) ? "" : "minor"}">${esc(c.name)}</div>` }) }).addTo(layer));
     groups.forEach((g) => {
       const c = city(g.cityId);
-      const label = g.cityId === "khorgos-cn" ? "Хоргос (КНР)" : g.cityId === "khorgos-kz" ? "Хоргос (РК)" : c.name;
+      const label = g.cityId.startsWith("khorgos") ? "Хоргос, граница" : c.name;
       const mk = L.marker([c.lat, c.lon], {
         title: `${label}: ${g.count}`,
         icon: L.divIcon({ className: "", iconSize: [0, 0], html: `<div class="pin"><div class="pin-dot ${selected === g.cityId ? "sel" : ""}">${g.count}</div><div class="pin-label">${esc(label)}</div></div>` }),
@@ -68,7 +74,9 @@ export function MapView({ groups, selected, onSelect, layers, onPoi }: {
     const key = groups.map((g) => g.cityId).sort().join(",");
     if (groups.length && fitted.current !== key) {
       fitted.current = key;
-      m.fitBounds(L.latLngBounds(groups.map((g) => [city(g.cityId).lat, city(g.cityId).lon] as [number, number])).pad(0.35), { maxZoom: 7 });
+      const near = groups.filter((g) => city(g.cityId).lon < 95); // the corridor; far-east China stays one pan away
+      const pts = (near.length ? near : groups).map((g) => [city(g.cityId).lat, city(g.cityId).lon] as [number, number]);
+      m.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 7 });
     }
   }, [ready, groups, selected]);
 

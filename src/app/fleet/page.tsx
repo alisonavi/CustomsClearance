@@ -24,7 +24,7 @@ export default function Fleet() {
         <div className="grid grid-cols-3 gap-2">
           <Stat n={n.free} label="Свободны" tone="ok" />
           <Stat n={n.trip} label="В рейсе" tone="brand" />
-          <Stat n={n.off} label="Простаивают" tone="warn" />
+          <Stat n={n.off} label="Простой" tone="warn" />
         </div>
         <H2>{count(trucks.length, ["машина", "машины", "машин"])}</H2>
         <div className="grid gap-3">{trucks.map((t) => <TruckRow key={t.id} t={t} />)}</div>
@@ -72,7 +72,8 @@ function TruckRow({ t }: { t: Truck }) {
         <span className="w-24 shrink-0 rounded-xl bg-brand-soft/60 p-1"><TruckArt body={t.body} kind={t.kind} /></span>
         <div className="min-w-0 flex-1">
           <div className="text-lg font-bold leading-snug">{t.make} {t.model}</div>
-          <div className="text-ink-2">{BODIES[t.body].name}, {tons(t.capacity)}{t.volume ? ` · ${t.volume} м³` : ""}</div>
+          <div className="text-ink-2">{BODIES[t.body].name}</div>
+          <div className="text-ink-2">{tons(t.capacity)}{t.volume ? ` · ${t.volume} м³` : ""}</div>
           <div className="mt-1"><Plate plate={t.plate} cn={t.cnPlate} /></div>
         </div>
       </div>

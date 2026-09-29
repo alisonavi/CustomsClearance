@@ -8,7 +8,7 @@ import { isOpen } from "@/lib/catalog";
 import { cityShort, poi } from "@/lib/geo";
 import { count } from "@/lib/format";
 import { CargoCard, TruckCard } from "@/components/cards";
-import { MapView, type Layers } from "@/components/map-view";
+import { MapView, mapCity, type Layers } from "@/components/map-view";
 import { Segmented } from "@/components/ui";
 
 /** Spec §9: map of free trucks / loads, border crossings, customs points, logistics centres. */
@@ -24,7 +24,7 @@ export default function MapPage() {
   const cargo = s.cargo.filter((c) => isOpen(c.status));
   const groups = useMemo(() => {
     const m: Record<string, number> = {};
-    (mode === "trucks" ? trucks.map((t) => t.at) : cargo.map((c) => c.from)).forEach((id) => { m[id] = (m[id] ?? 0) + 1; });
+    (mode === "trucks" ? trucks.map((t) => t.at) : cargo.map((c) => c.from)).forEach((id) => { const k = mapCity(id); m[k] = (m[k] ?? 0) + 1; });
     return Object.entries(m).map(([cityId, n]) => ({ cityId, count: n }));
   }, [mode, trucks, cargo]);
   const p = point ? poi(point) : undefined;
@@ -55,21 +55,21 @@ export default function MapPage() {
         <MapView groups={groups} selected={city} onSelect={(c) => { setPoint(undefined); setCity(c === city ? undefined : c); }} layers={layers} onPoi={(id) => { setCity(undefined); setPoint(id); }} />
         {!city && !p && (
           <div className="pointer-events-none absolute inset-x-3 bottom-4 z-[500] mx-auto max-w-xl rounded-2xl bg-white/95 px-4 py-3 text-ink-2 shadow-md">
-            {mode === "trucks" ? count(trucks.length, ["свободная машина", "свободные машины", "свободных машин"]) : count(cargo.length, ["груз ждёт", "груза ждут", "грузов ждут"]) + " машину"}. Нажмите на синий кружок. Машины показаны по городу, без точного места.
+            {mode === "trucks" ? count(trucks.length, ["свободная машина", "свободные машины", "свободных машин"]) : count(cargo.length, ["груз ждёт", "груза ждут", "грузов ждут"]) + " машину"}. Нажмите на синий кружок. Места показаны по городу, без точного адреса. Приблизьте карту — появятся погранпереходы и таможня.
           </div>
         )}
       </div>
       {(city || p) && (
         <div className="sheet-in absolute inset-x-0 bottom-0 z-[600] mx-auto max-h-[62dvh] max-w-xl overflow-y-auto rounded-t-3xl bg-white px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(14,26,43,0.2)]">
           <div className="flex items-center justify-between gap-3 pb-3">
-            <h2 className="text-xl font-bold">{p ? p.name : `${cityShort(city!)}: ${mode === "trucks" ? count(groups.find((g) => g.cityId === city)?.count ?? 0, ["машина", "машины", "машин"]) : count(groups.find((g) => g.cityId === city)?.count ?? 0, ["груз", "груза", "грузов"])}`}</h2>
+            <h2 className="text-xl font-bold">{p ? p.name : `${city!.startsWith("khorgos") ? "Хоргос, граница" : cityShort(city!)}: ${mode === "trucks" ? count(groups.find((g) => g.cityId === city)?.count ?? 0, ["машина", "машины", "машин"]) : count(groups.find((g) => g.cityId === city)?.count ?? 0, ["груз", "груза", "грузов"])}`}</h2>
             <button onClick={() => { setCity(undefined); setPoint(undefined); }} className="flex h-11 items-center gap-1 rounded-xl px-3 font-semibold text-brand"><X size={22} /> Закрыть</button>
           </div>
           {p ? (
             <p className="pb-2 text-lg text-ink-2">{p.note}. {p.kind === "border" ? "Время ожидания на переходе в демо-версии не показываем." : ""}</p>
           ) : (
             <div className="grid gap-3">
-              {mode === "trucks" ? trucks.filter((t) => t.at === city).map((t) => <TruckCard key={t.id} t={t} />) : cargo.filter((c) => c.from === city).map((c) => <CargoCard key={c.id} c={c} />)}
+              {mode === "trucks" ? trucks.filter((t) => mapCity(t.at) === city).map((t) => <TruckCard key={t.id} t={t} />) : cargo.filter((c) => mapCity(c.from) === city).map((c) => <CargoCard key={c.id} c={c} />)}
             </div>
           )}
         </div>

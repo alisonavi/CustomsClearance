@@ -29,7 +29,7 @@ function load(): State {
 const upd = <T extends { id: string }>(arr: T[], id: string, fn: (x: T) => T) => arr.map((x) => (x.id === id ? fn(x) : x));
 export const route = (c: Pick<Cargo, "from" | "to">) => `${cityShort(c.from)} → ${cityShort(c.to)}`;
 export const clientLabel = (s: State, id: string) => { const c = clientOf(s, id); return c.company ?? c.name; };
-const priceMid = (c: Cargo) => { const h = priceHint(c.from, c.to, c.weight); return round10k((h.lo + h.hi) / 2); };
+const priceMid = (c: Cargo) => { const h = priceHint(c.from, c.to, c.weight, c.bodies[0]); return round10k((h.lo + h.hi) / 2); };
 const isMeClient = (id: string) => id === ME_CLIENT;
 const isMeCarrier = (id: string) => id === ME_CARRIER;
 

@@ -32,11 +32,11 @@ function CargoView({ c }: { c: Cargo }) {
   const dealTruck = c.deal ? truckOf(s, c.deal.truckId) : undefined;
   const owner = role === "client" && c.clientId === ME_CLIENT;
   const myTrip = role === "carrier" && dealTruck?.carrierId === ME_CARRIER;
-  const hint = priceHint(c.from, c.to, c.weight);
+  const hint = priceHint(c.from, c.to, c.weight, c.bodies[0]);
   return (
     <>
       <TopBar title={owner ? "Моя заявка" : myTrip ? "Мой рейс" : "Груз"} />
-      <Page className="px-3 pb-36 pt-3">
+      <Page className="px-3 pb-48 pt-3">
         <Card className="p-5">
           <RouteLine big from={cityFull(c.from)} fromSub={c.fromPoint} to={cityFull(c.to)} toSub={c.toPoint} />
           <div className="mt-5 grid grid-cols-2 gap-3">
@@ -146,10 +146,9 @@ function OwnerOffers({ c }: { c: Cargo }) {
               <Link href={`/driver/${d.id}`} className="flex items-center gap-3">
                 <Avatar name={d.name} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-lg font-semibold">{d.name}</div>
-                  <div className="text-ink-3"><Stars value={d.rating} /> · {count(d.trips, ["перевозка", "перевозки", "перевозок"])}</div>
+                  <div className="text-lg font-semibold leading-snug">{d.name}</div>
+                  <div className="text-ink-3"><Stars value={d.rating} /> · {count(d.trips, ["перевозка", "перевозки", "перевозок"])} · {ago(o.at)}</div>
                 </div>
-                <span className="text-ink-3">{ago(o.at)}</span>
               </Link>
               <div className="mt-3 flex items-center gap-3 rounded-xl bg-page p-2.5">
                 <span className="w-20 shrink-0"><TruckArt body={t.body} kind={t.kind} /></span>
@@ -199,8 +198,8 @@ function OwnerOffers({ c }: { c: Cargo }) {
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold">{BODIES[t.body].name}, {tons(t.capacity)}{t.volume ? ` · ${t.volume} м³` : ""}</span>
                     <span className="block text-ink-3">{d.name} · <Stars value={d.rating} /></span>
+                    <span className="mt-1.5 block"><FitBadge fit={f} /></span>
                   </span>
-                  <FitBadge fit={f} />
                 </Link>
                 <div className="mt-3"><FitChecks fit={f} /></div>
                 <Button variant="secondary" full className="mt-3" onClick={() => { proposeToTruck(c.id, t.id); toast({ title: "Предложение отправлено", body: `${d.name} получит вашу заявку. Ответ придёт в уведомления.` }); }}>
@@ -237,7 +236,7 @@ function CarrierSide({ c }: { c: Cargo }) {
   const best = [...fits].sort((a, b) => (a.f.level === "full" ? 0 : a.f.level === "partial" ? 1 : 2) - (b.f.level === "full" ? 0 : b.f.level === "partial" ? 1 : 2))[0];
   const [truckId, setTruckId] = useState(s.q.carrier.truckId && mine.some((t) => t.id === s.q.carrier.truckId) ? s.q.carrier.truckId : best?.t.id);
   const [sheet, setSheet] = useState(false);
-  const hint = priceHint(c.from, c.to, c.weight);
+  const hint = priceHint(c.from, c.to, c.weight, c.bodies[0]);
   const [price, setPrice] = useState(c.price ?? round10k((hint.lo + hint.hi) / 2));
   const [notes, setNotes] = useState<string[]>([]);
   const t = mine.find((x) => x.id === truckId);
@@ -302,17 +301,15 @@ function CarrierSide({ c }: { c: Cargo }) {
 
       {t && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
-          <div className="mx-auto grid max-w-xl grid-cols-[auto_auto_1fr] gap-2 px-3">
-            <Button variant="outline" onClick={() => toast({ title: demoCall, body: `${k.company ?? k.name}` })} aria-label="Позвонить клиенту"><Phone size={22} /></Button>
-            <Button variant="outline" onClick={chat} aria-label="Написать клиенту"><MessageCircle size={22} /></Button>
-            {c.priceMode === "fixed" && c.price && !myBid ? (
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <Button onClick={() => send(c.price!)}>Взять за {money(c.price)}</Button>
-                <Button variant="secondary" onClick={() => setSheet(true)} className="px-3">Своя цена</Button>
-              </div>
-            ) : (
-              <Button onClick={() => setSheet(true)}>{myBid?.status === "new" ? "Изменить цену" : "Предложить цену"}</Button>
-            )}
+          <div className="mx-auto grid max-w-xl gap-2 px-3">
+            {!proposal && (c.priceMode === "fixed" && c.price && !myBid
+              ? <Button full onClick={() => send(c.price!)}>Взять за {money(c.price)}</Button>
+              : <Button full onClick={() => setSheet(true)}>{myBid?.status === "new" ? "Изменить цену" : "Предложить цену"}</Button>)}
+            <div className={`grid gap-2 ${!proposal && c.priceMode === "fixed" && c.price && !myBid ? "grid-cols-3" : "grid-cols-2"}`}>
+              {!proposal && c.priceMode === "fixed" && c.price && !myBid && <Button variant="secondary" size="md" className="whitespace-nowrap px-2" onClick={() => setSheet(true)}>Своя цена</Button>}
+              <Button variant="outline" size="md" className="whitespace-nowrap px-2" onClick={chat}><MessageCircle size={20} aria-hidden /> Написать</Button>
+              <Button variant="outline" size="md" className="whitespace-nowrap px-2" onClick={() => toast({ title: demoCall, body: `${k.company ?? k.name}` })}><Phone size={20} aria-hidden /> Позвонить</Button>
+            </div>
           </div>
         </div>
       )}

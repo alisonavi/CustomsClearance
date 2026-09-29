@@ -1,6 +1,6 @@
 const clean = (s: string) => s.replace(/[  ]/g, " ");
 export const nf = (n: number) => clean(new Intl.NumberFormat("ru-RU").format(Math.round(n)));
-export const money = (n: number) => `${nf(n)} ₸`;
+export const money = (n: number) => `${nf(n)}\u00a0₸`;
 
 export function plural(n: number, forms: [string, string, string]) {
   const a = Math.abs(n) % 100, b = a % 10;
